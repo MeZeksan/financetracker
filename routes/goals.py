@@ -7,7 +7,7 @@ from models import (
 from routes.auth import get_current_user
 from utils import (
     create_goal, get_user_goals, get_goal_by_id,
-    contribute_to_goal, delete_goal
+    contribute_to_goal, update_goal, delete_goal
 )
 
 router = APIRouter(prefix="/goals", tags=["Управление финансовыми целями"])
@@ -140,14 +140,20 @@ async def update_financial_goal(
             detail="Нет доступа к этой цели"
         )
     
-    if goal_update.name is not None:
-        goal["name"] = goal_update.name
-    if goal_update.target_amount is not None:
-        goal["target_amount"] = goal_update.target_amount
-    if goal_update.target_date is not None:
-        goal["target_date"] = str(goal_update.target_date)
+    updated_goal = update_goal(
+        goal_id,
+        name=goal_update.name,
+        target_amount=goal_update.target_amount,
+        target_date=goal_update.target_date
+    )
     
-    return calculate_goal_progress(goal)
+    if not updated_goal:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Ошибка при обновлении цели"
+        )
+    
+    return calculate_goal_progress(updated_goal)
 
 
 @router.delete("/{goal_id}", response_model=MessageResponse)

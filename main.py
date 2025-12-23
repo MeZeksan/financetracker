@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 from routes import auth, transaction, budget, goals, analytics
+from db import init_db
 from utils import init_test_data
 
 
@@ -11,11 +12,13 @@ async def lifespan(app: FastAPI):
     print("=" * 60)
     print("FinanceTracker API запущен!")
     print("=" * 60)
-    print("Документация Swagger: http://localhost:8000/docs")
-    print("Документация ReDoc: http://localhost:8000/redoc")
-    print("=" * 60)
+    print("Инициализация базы данных...")
+    init_db()
     print("Инициализация тестовых данных...")
     init_test_data()
+    print("=" * 60)
+    print("Документация Swagger: http://localhost:8000/docs")
+    print("Документация ReDoc: http://localhost:8000/redoc")
     print("=" * 60)
     print("Готов к работе!")
     print("=" * 60)
