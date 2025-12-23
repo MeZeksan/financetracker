@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Request, Query
 from typing import List, Optional
 from datetime import datetime
 from collections import defaultdict
@@ -13,10 +13,11 @@ router = APIRouter(prefix="/analytics", tags=["Аналитика финансо
 
 @router.get("/statistics", response_model=AnalyticsResponse)
 async def get_financial_statistics(
-    current_user: dict = Depends(get_current_user),
+    request: Request,
     start_date: Optional[str] = Query(None, description="Начальная дата (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Конечная дата (YYYY-MM-DD)")
 ):
+    current_user = await get_current_user(request)
     transactions = get_user_transactions(current_user["id"])
     
     if start_date:
@@ -105,10 +106,11 @@ async def get_financial_statistics(
 
 @router.get("/expenses/dynamics", response_model=List[ExpenseDynamics])
 async def get_expense_dynamics(
-    current_user: dict = Depends(get_current_user),
+    request: Request,
     start_date: Optional[str] = Query(None, description="Начальная дата (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Конечная дата (YYYY-MM-DD)")
 ):
+    current_user = await get_current_user(request)
     transactions = get_user_transactions(current_user["id"])
     
     transactions = [t for t in transactions if t["type"] == "expense"]
@@ -139,10 +141,11 @@ async def get_expense_dynamics(
 @router.get("/categories/{category_id}/statistics", response_model=CategoryStatistics)
 async def get_category_statistics(
     category_id: int,
-    current_user: dict = Depends(get_current_user),
+    request: Request,
     start_date: Optional[str] = Query(None, description="Начальная дата (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="Конечная дата (YYYY-MM-DD)")
 ):
+    current_user = await get_current_user(request)
     category = get_category_by_id(category_id)
     if not category:
         raise HTTPException(
@@ -183,8 +186,8 @@ async def get_category_statistics(
 
 
 @router.get("/summary", response_model=dict)
-async def get_summary(current_user: dict = Depends(get_current_user)):
-   
+async def get_summary(request: Request):
+    current_user = await get_current_user(request)
     transactions = get_user_transactions(current_user["id"])
     
     total_income = sum(t["amount"] for t in transactions if t["type"] == "income")
@@ -202,4 +205,3 @@ async def get_summary(current_user: dict = Depends(get_current_user)):
         "expense_count": expense_count,
         "total_transactions": len(transactions)
     }
-

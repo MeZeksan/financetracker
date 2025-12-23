@@ -11,7 +11,6 @@ class CategoryType(str, Enum):
     income = "income"
     expense = "expense"
 
-# ===== USER MODELS =====
 class UserBase(BaseModel):
     full_name: str = Field(..., description="ФИО пользователя")
     email: EmailStr = Field(..., description="Email пользователя")
@@ -42,7 +41,6 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
-# ===== CATEGORY MODELS =====
 class CategoryBase(BaseModel):
     name: str = Field(..., description="Название категории")
     type: CategoryType = Field(..., description="Тип категории")
@@ -57,7 +55,6 @@ class Category(CategoryBase):
     class Config:
         from_attributes = True
 
-# ===== TRANSACTION MODELS =====
 class TransactionBase(BaseModel):
     category_id: int = Field(..., description="ID категории")
     amount: float = Field(..., gt=0, description="Сумма транзакции")
@@ -79,7 +76,6 @@ class Transaction(TransactionBase):
 class TransactionResponse(Transaction):
     category_name: Optional[str] = None
 
-# ===== BUDGET MODELS =====
 class BudgetBase(BaseModel):
     category_id: int = Field(..., description="ID категории")
     limit_amount: float = Field(..., gt=0, description="Лимит суммы")
@@ -102,7 +98,6 @@ class BudgetStatus(Budget):
     remaining_amount: float
     percentage_used: float
 
-# ===== FINANCIAL GOAL MODELS =====
 class GoalBase(BaseModel):
     name: str = Field(..., description="Название цели")
     target_amount: float = Field(..., gt=0, description="Целевая сумма")
@@ -132,7 +127,6 @@ class GoalProgress(Goal):
     progress_percentage: float
     remaining_amount: float
 
-# ===== ANALYTICS MODELS =====
 class CategoryStatistics(BaseModel):
     category_name: str
     category_id: int
@@ -159,13 +153,6 @@ class AnalyticsResponse(BaseModel):
     income_by_category: List[CategoryStatistics]
     expense_dynamics: List[ExpenseDynamics]
 
-# ===== RESPONSE MODELS =====
 class MessageResponse(BaseModel):
     message: str
     detail: Optional[str] = None
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserResponse
-

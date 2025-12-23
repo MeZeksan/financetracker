@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status, Query
+from fastapi import APIRouter, HTTPException, Request, status, Query
 from typing import List, Optional
 from models import (
     TransactionCreate, Transaction, TransactionResponse,
@@ -16,8 +16,9 @@ router = APIRouter(prefix="/transactions", tags=["Управление тран�
 @router.post("/categories", response_model=Category, status_code=status.HTTP_201_CREATED)
 async def create_new_category(
     category_data: CategoryCreate,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     category = create_category(
         user_id=current_user["id"],
         name=category_data.name,
@@ -27,8 +28,8 @@ async def create_new_category(
     return Category(**category)
 
 @router.get("/categories", response_model=List[Category])
-async def get_categories(current_user: dict = Depends(get_current_user)):
-   
+async def get_categories(request: Request):
+    current_user = await get_current_user(request)
     categories = get_user_categories(current_user["id"])
     return [Category(**cat) for cat in categories]
 
@@ -36,9 +37,9 @@ async def get_categories(current_user: dict = Depends(get_current_user)):
 @router.post("/income", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 async def add_income(
     transaction_data: TransactionCreate,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
-  
+    current_user = await get_current_user(request)
     category = get_category_by_id(transaction_data.category_id)
     if not category:
         raise HTTPException(
@@ -76,8 +77,9 @@ async def add_income(
 @router.post("/expense", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 async def add_expense(
     transaction_data: TransactionCreate,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     category = get_category_by_id(transaction_data.category_id)
     if not category:
         raise HTTPException(
@@ -114,9 +116,10 @@ async def add_expense(
 
 @router.get("/history", response_model=List[TransactionResponse])
 async def get_transaction_history(
-    current_user: dict = Depends(get_current_user),
+    request: Request,
     transaction_type: Optional[str] = Query(None, description="Фильтр по типу (income/expense)")
 ):
+    current_user = await get_current_user(request)
     transactions = get_user_transactions(current_user["id"])
     
     if transaction_type:
@@ -137,8 +140,9 @@ async def get_transaction_history(
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 async def get_transaction(
     transaction_id: int,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     transaction = get_transaction_by_id(transaction_id)
     if not transaction:
         raise HTTPException(
@@ -162,8 +166,9 @@ async def get_transaction(
 @router.delete("/{transaction_id}", response_model=MessageResponse)
 async def delete_transaction_by_id(
     transaction_id: int,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     transaction = get_transaction_by_id(transaction_id)
     if not transaction:
         raise HTTPException(
@@ -188,4 +193,3 @@ async def delete_transaction_by_id(
         message="Транзакция успешно удалена",
         detail=f"Транзакция #{transaction_id} была удалена"
     )
-

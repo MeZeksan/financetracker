@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Request, status
 from typing import List
 from models import (
     GoalCreate, Goal, GoalProgress, GoalContribute, 
@@ -36,8 +36,9 @@ def calculate_goal_progress(goal: dict) -> GoalProgress:
 @router.post("/", response_model=GoalProgress, status_code=status.HTTP_201_CREATED)
 async def create_financial_goal(
     goal_data: GoalCreate,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     goal = create_goal(
         user_id=current_user["id"],
         name=goal_data.name,
@@ -49,7 +50,8 @@ async def create_financial_goal(
 
 
 @router.get("/progress", response_model=List[GoalProgress])
-async def get_goals_progress(current_user: dict = Depends(get_current_user)):
+async def get_goals_progress(request: Request):
+    current_user = await get_current_user(request)
     goals = get_user_goals(current_user["id"])
     
     goals_progress = []
@@ -65,8 +67,9 @@ async def get_goals_progress(current_user: dict = Depends(get_current_user)):
 @router.get("/{goal_id}", response_model=GoalProgress)
 async def get_goal_by_id_endpoint(
     goal_id: int,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     goal = get_goal_by_id(goal_id)
     
     if not goal:
@@ -88,8 +91,9 @@ async def get_goal_by_id_endpoint(
 async def contribute_to_financial_goal(
     goal_id: int,
     contribution: GoalContribute,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     goal = get_goal_by_id(goal_id)
     
     if not goal:
@@ -119,8 +123,9 @@ async def contribute_to_financial_goal(
 async def update_financial_goal(
     goal_id: int,
     goal_update: GoalUpdate,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     goal = get_goal_by_id(goal_id)
     
     if not goal:
@@ -148,8 +153,9 @@ async def update_financial_goal(
 @router.delete("/{goal_id}", response_model=MessageResponse)
 async def delete_financial_goal(
     goal_id: int,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     goal = get_goal_by_id(goal_id)
     
     if not goal:
@@ -175,4 +181,3 @@ async def delete_financial_goal(
         message="Финансовая цель успешно удалена",
         detail=f"Цель '{goal['name']}' была удалена"
     )
-

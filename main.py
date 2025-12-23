@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 from routes import auth, transaction, budget, goals, analytics
 from utils import init_test_data
@@ -7,8 +8,6 @@ from utils import init_test_data
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Управление жизненным циклом приложения"""
-    # Startup
     print("=" * 60)
     print("FinanceTracker API запущен!")
     print("=" * 60)
@@ -21,10 +20,8 @@ async def lifespan(app: FastAPI):
     print("Готов к работе!")
     print("=" * 60)
     yield
-    # Shutdown
     print("Остановка приложения...")
 
-# Создание приложения FastAPI
 app = FastAPI(
     lifespan=lifespan,
     title="FinanceTracker API",
@@ -44,12 +41,12 @@ app = FastAPI(
     
     ## Авторизация:
     
-    Большинство эндпоинтов требуют авторизации. Для авторизации:
+    Авторизация работает через сессии. Для работы с API:
     
     1. Зарегистрируйтесь через `/auth/register` или войдите через `/auth/login`
-    2. Скопируйте полученный `access_token`
-    3. Нажмите кнопку "Authorize" в правом верхнем углу
-    4. Введите токен в формате: `Bearer ваш_токен`
+    2. После успешного входа сессия сохраняется автоматически
+    3. Все последующие запросы будут использовать эту сессию
+    4. Для выхода используйте `/auth/logout`
     
     ## Тестовые данные:
     
@@ -64,7 +61,11 @@ app = FastAPI(
     }
 )
 
-# Настройка CORS
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="secret-key-for-sessions"
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -73,7 +74,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Подключение роутеров
 app.include_router(auth.router)
 app.include_router(transaction.router)
 app.include_router(budget.router)
@@ -83,11 +83,6 @@ app.include_router(analytics.router)
 
 @app.get("/", tags=["Главная"])
 async def root():
-    """
-    Корневой эндпоинт API
-    
-    Возвращает информацию о сервисе и ссылки на документацию
-    """
     return {
         "message": "Добро пожаловать в FinanceTracker API!",
         "version": "1.0.0",
@@ -112,11 +107,6 @@ async def root():
 
 @app.get("/health", tags=["Главная"])
 async def health_check():
-    """
-    Проверка состояния сервиса
-    
-    Используется для мониторинга работоспособности API
-    """
     return {
         "status": "healthy",
         "service": "FinanceTracker API",

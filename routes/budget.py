@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Request, status
 from typing import List
 from models import BudgetCreate, Budget, BudgetStatus, MessageResponse
 from routes.auth import get_current_user
@@ -42,8 +42,9 @@ def calculate_budget_status(budget: dict, user_id: int) -> BudgetStatus:
 @router.post("/", response_model=BudgetStatus, status_code=status.HTTP_201_CREATED)
 async def create_new_budget(
     budget_data: BudgetCreate,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     category = get_category_by_id(budget_data.category_id)
     if not category:
         raise HTTPException(
@@ -86,7 +87,8 @@ async def create_new_budget(
 
 
 @router.get("/status", response_model=List[BudgetStatus])
-async def get_budget_status(current_user: dict = Depends(get_current_user)):
+async def get_budget_status(request: Request):
+    current_user = await get_current_user(request)
     budgets = get_user_budgets(current_user["id"])
     
     budget_statuses = []
@@ -102,8 +104,9 @@ async def get_budget_status(current_user: dict = Depends(get_current_user)):
 @router.get("/{budget_id}", response_model=BudgetStatus)
 async def get_budget_by_id(
     budget_id: int,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     budgets = get_user_budgets(current_user["id"])
     budget = next((b for b in budgets if b["id"] == budget_id), None)
     
@@ -119,8 +122,9 @@ async def get_budget_by_id(
 @router.delete("/{budget_id}", response_model=MessageResponse)
 async def delete_budget_by_id(
     budget_id: int,
-    current_user: dict = Depends(get_current_user)
+    request: Request
 ):
+    current_user = await get_current_user(request)
     budgets = get_user_budgets(current_user["id"])
     budget = next((b for b in budgets if b["id"] == budget_id), None)
     
@@ -141,4 +145,3 @@ async def delete_budget_by_id(
         message="Бюджет успешно удален",
         detail=f"Бюджет #{budget_id} был удален"
     )
-
