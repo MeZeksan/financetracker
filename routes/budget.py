@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request, status
 from typing import List
-from models import BudgetCreate, Budget, BudgetStatus, MessageResponse
+from models import BudgetCreate, Budget, BudgetUpdate, BudgetStatus, MessageResponse
 from routes.auth import get_current_user
 from utils import (
-    create_budget, get_user_budgets, delete_budget,
+    create_budget, get_user_budgets, delete_budget, update_budget,
     get_category_by_id, get_user_transactions
 )
 
@@ -117,6 +117,71 @@ async def get_budget_by_id(
         )
     
     return calculate_budget_status(budget, current_user["id"])
+
+
+@router.put("/{budget_id}", response_model=BudgetStatus)
+async def update_budget_by_id(
+    budget_id: int,
+    budget_update: BudgetUpdate,
+    request: Request
+):
+    current_user = await get_current_user(request)
+    budgets = get_user_budgets(current_user["id"])
+    budget = next((b for b in budgets if b["id"] == budget_id), None)
+    
+    if not budget:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Бюджет не найден"
+        )
+    
+    update_data = {}
+    
+    if budget_update.category_id is not None:
+        category = get_category_by_id(budget_update.category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Категория не найдена"
+            )
+        if category["user_id"] != current_user["id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нет доступа к этой категории"
+            )
+        if category["type"] != "expense":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Бюджет можно создавать только для категорий расходов"
+            )
+        update_data["category_id"] = budget_update.category_id
+    
+    if budget_update.limit_amount is not None:
+        update_data["limit_amount"] = budget_update.limit_amount
+    
+    if budget_update.period is not None:
+        try:
+            year, month = budget_update.period.split("-")
+            if len(year) != 4 or len(month) != 2:
+                raise ValueError
+            int(year)
+            int(month)
+        except (ValueError, AttributeError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Неверный формат периода. Используйте формат YYYY-MM (например: 2024-01)"
+            )
+        update_data["period"] = budget_update.period
+    
+    updated_budget = update_budget(budget_id, **update_data)
+    
+    if not updated_budget:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Ошибка при обновлении бюджета"
+        )
+    
+    return calculate_budget_status(updated_budget, current_user["id"])
 
 
 @router.delete("/{budget_id}", response_model=MessageResponse)

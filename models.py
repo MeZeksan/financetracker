@@ -48,6 +48,10 @@ class CategoryBase(BaseModel):
 class CategoryCreate(CategoryBase):
     pass
 
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = Field(None, description="Название категории")
+    type: Optional[CategoryType] = Field(None, description="Тип категории")
+
 class Category(CategoryBase):
     id: int
     user_id: int
@@ -83,6 +87,11 @@ class BudgetBase(BaseModel):
 
 class BudgetCreate(BudgetBase):
     pass
+
+class BudgetUpdate(BaseModel):
+    category_id: Optional[int] = Field(None, description="ID категории")
+    limit_amount: Optional[float] = Field(None, gt=0, description="Лимит суммы")
+    period: Optional[str] = Field(None, description="Период (например: 2024-01)")
 
 class Budget(BudgetBase):
     id: int

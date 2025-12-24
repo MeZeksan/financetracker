@@ -187,6 +187,37 @@ def get_category_by_id(category_id: int) -> Optional[Dict[str, Any]]:
         db.close()
 
 
+def update_category(category_id: int, **kwargs) -> Optional[Dict[str, Any]]:
+    db = get_db()
+    try:
+        category = db.query(Category).filter(Category.id == category_id).first()
+        if not category:
+            return None
+        
+        for key, value in kwargs.items():
+            if value is not None:
+                setattr(category, key, value)
+        
+        db.commit()
+        db.refresh(category)
+        return category_to_dict(category)
+    finally:
+        db.close()
+
+
+def delete_category(category_id: int) -> bool:
+    db = get_db()
+    try:
+        category = db.query(Category).filter(Category.id == category_id).first()
+        if not category:
+            return False
+        db.delete(category)
+        db.commit()
+        return True
+    finally:
+        db.close()
+
+
 def create_transaction(user_id: int, category_id: int, amount: float, 
                        transaction_type: str, transaction_date: str, 
                        description: Optional[str] = None) -> Dict[str, Any]:
@@ -263,6 +294,24 @@ def get_user_budgets(user_id: int) -> List[Dict[str, Any]]:
     try:
         budgets = db.query(Budget).filter(Budget.user_id == user_id).all()
         return [budget_to_dict(b) for b in budgets]
+    finally:
+        db.close()
+
+
+def update_budget(budget_id: int, **kwargs) -> Optional[Dict[str, Any]]:
+    db = get_db()
+    try:
+        budget = db.query(Budget).filter(Budget.id == budget_id).first()
+        if not budget:
+            return None
+        
+        for key, value in kwargs.items():
+            if value is not None:
+                setattr(budget, key, value)
+        
+        db.commit()
+        db.refresh(budget)
+        return budget_to_dict(budget)
     finally:
         db.close()
 

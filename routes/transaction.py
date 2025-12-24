@@ -2,13 +2,13 @@ from fastapi import APIRouter, HTTPException, Request, status, Query
 from typing import List, Optional
 from models import (
     TransactionCreate, Transaction, TransactionResponse,
-    CategoryCreate, Category, MessageResponse
+    CategoryCreate, Category, CategoryUpdate, MessageResponse
 )
 from routes.auth import get_current_user
 from utils import (
     create_transaction, get_user_transactions, get_transaction_by_id,
     delete_transaction, create_category, get_user_categories,
-    get_category_by_id
+    get_category_by_id, update_category, delete_category
 )
 
 router = APIRouter(prefix="/transactions", tags=["Управление транзакциями"])
@@ -32,6 +32,100 @@ async def get_categories(request: Request):
     current_user = await get_current_user(request)
     categories = get_user_categories(current_user["id"])
     return [Category(**cat) for cat in categories]
+
+
+@router.get("/categories/{category_id}", response_model=Category)
+async def get_category_by_id_endpoint(
+    category_id: int,
+    request: Request
+):
+    current_user = await get_current_user(request)
+    category = get_category_by_id(category_id)
+    
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Категория не найдена"
+        )
+    
+    if category["user_id"] != current_user["id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нет доступа к этой категории"
+        )
+    
+    return Category(**category)
+
+
+@router.put("/categories/{category_id}", response_model=Category)
+async def update_category_by_id(
+    category_id: int,
+    category_update: CategoryUpdate,
+    request: Request
+):
+    current_user = await get_current_user(request)
+    category = get_category_by_id(category_id)
+    
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Категория не найдена"
+        )
+    
+    if category["user_id"] != current_user["id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нет доступа к этой категории"
+        )
+    
+    update_data = {}
+    if category_update.name is not None:
+        update_data["name"] = category_update.name
+    if category_update.type is not None:
+        update_data["type"] = category_update.type.value
+    
+    updated_category = update_category(category_id, **update_data)
+    
+    if not updated_category:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Ошибка при обновлении категории"
+        )
+    
+    return Category(**updated_category)
+
+
+@router.delete("/categories/{category_id}", response_model=MessageResponse)
+async def delete_category_by_id(
+    category_id: int,
+    request: Request
+):
+    current_user = await get_current_user(request)
+    category = get_category_by_id(category_id)
+    
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Категория не найдена"
+        )
+    
+    if category["user_id"] != current_user["id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нет доступа к этой категории"
+        )
+    
+    success = delete_category(category_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Ошибка при удалении категории"
+        )
+    
+    return MessageResponse(
+        message="Категория успешно удалена",
+        detail=f"Категория '{category['name']}' была удалена"
+    )
 
 
 @router.post("/income", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
