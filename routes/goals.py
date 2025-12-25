@@ -48,7 +48,6 @@ async def create_financial_goal(
     
     return calculate_goal_progress(goal)
 
-
 @router.get("/progress", response_model=List[GoalProgress])
 async def get_goals_progress(request: Request):
     current_user = await get_current_user(request)
@@ -62,7 +61,6 @@ async def get_goals_progress(request: Request):
     goals_progress.sort(key=lambda x: x.progress_percentage)
     
     return goals_progress
-
 
 @router.get("/{goal_id}", response_model=GoalProgress)
 async def get_goal_by_id_endpoint(

@@ -73,7 +73,7 @@ async def create_new_budget(
     except (ValueError, AttributeError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Неверный формат периода. Используйте формат YYYY-MM (например: 2024-01)"
+            detail="Неверный формат периода."
         )
     
     budget = create_budget(
@@ -84,7 +84,6 @@ async def create_new_budget(
     )
     
     return calculate_budget_status(budget, current_user["id"])
-
 
 @router.get("/status", response_model=List[BudgetStatus])
 async def get_budget_status(request: Request):

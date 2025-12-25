@@ -56,7 +56,6 @@ async def get_category_by_id_endpoint(
     
     return Category(**category)
 
-
 @router.put("/categories/{category_id}", response_model=Category)
 async def update_category_by_id(
     category_id: int,
@@ -94,7 +93,6 @@ async def update_category_by_id(
     
     return Category(**updated_category)
 
-
 @router.delete("/categories/{category_id}", response_model=MessageResponse)
 async def delete_category_by_id(
     category_id: int,
@@ -126,7 +124,6 @@ async def delete_category_by_id(
         message="Категория успешно удалена",
         detail=f"Категория '{category['name']}' была удалена"
     )
-
 
 @router.post("/income", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 async def add_income(
@@ -167,7 +164,6 @@ async def add_income(
     
     return response
 
-
 @router.post("/expense", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 async def add_expense(
     transaction_data: TransactionCreate,
@@ -207,7 +203,6 @@ async def add_expense(
     
     return response
 
-
 @router.get("/history", response_model=List[TransactionResponse])
 async def get_transaction_history(
     request: Request,
@@ -229,7 +224,6 @@ async def get_transaction_history(
         result.append(response)
     
     return result
-
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 async def get_transaction(
@@ -255,7 +249,6 @@ async def get_transaction(
     response.category_name = category["name"] if category else None
     
     return response
-
 
 @router.delete("/{transaction_id}", response_model=MessageResponse)
 async def delete_transaction_by_id(

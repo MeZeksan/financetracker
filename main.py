@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 from routes import auth, transaction, budget, goals, analytics
@@ -29,20 +28,20 @@ app = FastAPI(
     lifespan=lifespan,
     title="FinanceTracker API",
     description="""
-    # FinanceTracker - Менеджер персональных финансов
+    FinanceTracker - Менеджер персональных финансов
     
     Сервис для управления личными финансами, учета доходов и расходов, 
     планирования бюджета и анализа финансового состояния.
     
-    ## Основные возможности:
+    Основные возможности:
     
-    * **Управление учетной записью** - регистрация, авторизация, редактирование профиля
-    * **Управление транзакциями** - добавление доходов и расходов, просмотр истории
-    * **Управление бюджетом** - установка лимитов расходов, отслеживание выполнения
-    * **Финансовые цели** - постановка целей накопления, отслеживание прогресса
-    * **Аналитика** - статистика по категориям, динамика расходов
+    * Управление учетной записью - регистрация, авторизация, редактирование профиля
+    * Управление транзакциями - добавление доходов и расходов, просмотр истории
+    * Управление бюджетом - установка лимитов расходов, отслеживание выполнения
+    * Финансовые цели - постановка целей накопления, отслеживание прогресса
+    * Аналитика - статистика по категориям, динамика расходов
     
-    ## Авторизация:
+    Авторизация:
     
     Авторизация работает через сессии. Для работы с API:
     
@@ -51,11 +50,11 @@ app = FastAPI(
     3. Все последующие запросы будут использовать эту сессию
     4. Для выхода используйте `/auth/logout`
     
-    ## Тестовые данные:
+    Тестовые данные:
     
     При запуске приложения автоматически создается тестовый пользователь:
-    - **Email**: test@example.com
-    - **Пароль**: password123
+    - Email: test@example.com
+    - Пароль: password123
     """,
     version="1.0.0",
     contact={
@@ -67,14 +66,6 @@ app = FastAPI(
 app.add_middleware(
     SessionMiddleware,
     secret_key="secret-key-for-sessions"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 app.include_router(auth.router)

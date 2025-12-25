@@ -103,7 +103,6 @@ async def get_financial_statistics(
         expense_dynamics=expense_dynamics
     )
 
-
 @router.get("/expenses/dynamics", response_model=List[ExpenseDynamics])
 async def get_expense_dynamics(
     request: Request,
@@ -136,7 +135,6 @@ async def get_expense_dynamics(
         )
     
     return dynamics
-
 
 @router.get("/categories/{category_id}/statistics", response_model=CategoryStatistics)
 async def get_category_statistics(
@@ -183,7 +181,6 @@ async def get_category_statistics(
         transaction_count=transaction_count,
         percentage=round(percentage, 2)
     )
-
 
 @router.get("/summary", response_model=dict)
 async def get_summary(request: Request):

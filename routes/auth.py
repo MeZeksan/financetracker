@@ -175,4 +175,3 @@ async def delete_current_user(request: Request):
         message="Учетная запись успешно удалена",
         detail="Все связанные данные также были удалены"
     )
-
