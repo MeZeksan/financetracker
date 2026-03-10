@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from datetime import datetime
@@ -27,6 +27,8 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")
     goals = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
+    ai_forecasts = relationship("AIForecast", back_populates="user", cascade="all, delete-orphan")
+    ai_budget_recommendations = relationship("AIBudgetRecommendation", back_populates="user", cascade="all, delete-orphan")
 
 
 class Category(Base):
@@ -53,6 +55,12 @@ class Transaction(Base):
     transaction_date = Column(String, nullable=False)
     description = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # New AI fields
+    ai_predicted_category = Column(String, nullable=True)
+    ai_confidence = Column(Float, nullable=True)
+    is_anomaly = Column(Boolean, default=False)
+    anomaly_score = Column(Float, nullable=True)
     
     user = relationship("User", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
@@ -86,8 +94,44 @@ class Goal(Base):
     user = relationship("User", back_populates="goals")
 
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
+class AIForecast(Base):
+    __tablename__ = "ai_forecasts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    period = Column(String, nullable=False)  # e.g., "2024-02"
+    forecasted_balance = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User")
+
+
+class AIAnomaly(Base):
+    __tablename__ = "ai_anomalies"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False)
+    anomaly_score = Column(Float, nullable=False)
+    reason = Column(String, nullable=True)
+    detected_at = Column(DateTime, default=datetime.utcnow)
+    
+    transaction = relationship("Transaction")
+
+
+class AIBudgetRecommendation(Base):
+    __tablename__ = "ai_budget_recommendations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
+    recommendation_type = Column(String, nullable=False)  # INCREASE, DECREASE, CREATE
+    current_limit = Column(Float, nullable=True)
+    proposed_limit = Column(Float, nullable=True)
+    justification = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User")
+    category = relationship("Category")
 
 
 def get_db():

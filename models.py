@@ -40,7 +40,6 @@ class UserResponse(BaseModel):
     email: str
     created_at: datetime
 
-
 class CategoryBase(BaseModel):
     name: str = Field(..., description="Название категории")
     type: CategoryType = Field(..., description="Тип категории")
