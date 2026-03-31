@@ -1,13 +1,43 @@
-from fastapi import APIRouter, HTTPException, Request, status
-from typing import List
-from models import BudgetCreate, Budget, BudgetUpdate, BudgetStatus, MessageResponse
+from datetime import datetime
+
+from fastapi import APIRouter, HTTPException, Request, status, Query
+from typing import List, Optional
+from models import (
+    BudgetCreate,
+    Budget,
+    BudgetUpdate,
+    BudgetStatus,
+    BudgetTopUp,
+    BudgetSpend,
+    MessageResponse,
+)
 from routes.auth import get_current_user
 from utils import (
-    create_budget, get_user_budgets, delete_budget, update_budget,
-    get_category_by_id, get_user_transactions
+    create_budget,
+    create_transaction,
+    get_user_budgets,
+    get_user_budgets_for_display,
+    get_user_budget_periods,
+    delete_budget,
+    update_budget,
+    get_category_by_id,
+    get_user_transactions,
 )
 
 router = APIRouter(prefix="/budgets", tags=["Управление бюджетом"])
+
+
+def _default_spend_date_for_period(period: str) -> str:
+    today = datetime.now().strftime("%Y-%m-%d")
+    if today.startswith(period):
+        return today
+    return f"{period}-15"
+
+
+def _resolve_user_budget(user_id: int, budget_id: int) -> Optional[dict]:
+    budgets = get_user_budgets(user_id)
+    return next((b for b in budgets if b["id"] == budget_id), None)
+
 
 def calculate_budget_status(budget: dict, user_id: int) -> BudgetStatus:
     category = get_category_by_id(budget["category_id"])
@@ -86,18 +116,104 @@ async def create_new_budget(
     return calculate_budget_status(budget, current_user["id"])
 
 @router.get("/status", response_model=List[BudgetStatus])
-async def get_budget_status(request: Request):
+async def get_budget_status(
+    request: Request,
+    all_periods: bool = Query(
+        False,
+        description="Если true — все месяцы; иначе только текущий календарный месяц (YYYY-MM)",
+    ),
+    period: Optional[str] = Query(
+        None,
+        description="Показать бюджеты только за указанный период YYYY-MM (приоритетнее all_periods)",
+    ),
+):
     current_user = await get_current_user(request)
-    budgets = get_user_budgets(current_user["id"])
-    
+    budgets = get_user_budgets_for_display(
+        current_user["id"],
+        period=period,
+        all_periods=all_periods,
+    )
+
     budget_statuses = []
     for budget in budgets:
-        status = calculate_budget_status(budget, current_user["id"])
-        budget_statuses.append(status)
-    
+        budget_statuses.append(calculate_budget_status(budget, current_user["id"]))
+
     budget_statuses.sort(key=lambda x: x.percentage_used, reverse=True)
-    
+
     return budget_statuses
+
+
+@router.get("/periods", response_model=List[str])
+async def list_budget_periods(request: Request):
+    current_user = await get_current_user(request)
+    return get_user_budget_periods(current_user["id"])
+
+
+@router.post("/{budget_id}/top-up", response_model=BudgetStatus)
+async def budget_top_up(
+    budget_id: int,
+    body: BudgetTopUp,
+    request: Request,
+):
+    current_user = await get_current_user(request)
+    budget = _resolve_user_budget(current_user["id"], budget_id)
+    if not budget:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Бюджет не найден",
+        )
+    new_limit = budget["limit_amount"] + body.amount
+    if new_limit <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Итоговый лимит должен быть больше нуля",
+        )
+    updated = update_budget(budget_id, limit_amount=new_limit)
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось обновить лимит",
+        )
+    return calculate_budget_status(updated, current_user["id"])
+
+
+@router.post("/{budget_id}/spend", response_model=BudgetStatus)
+async def budget_spend(
+    budget_id: int,
+    body: BudgetSpend,
+    request: Request,
+):
+    current_user = await get_current_user(request)
+    budget = _resolve_user_budget(current_user["id"], budget_id)
+    if not budget:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Бюджет не найден",
+        )
+    category = get_category_by_id(budget["category_id"])
+    if not category or category.get("type") != "expense":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Бюджет привязан к недопустимой категории",
+        )
+    if body.transaction_date is None:
+        tx_date = _default_spend_date_for_period(budget["period"])
+    else:
+        tx_date = str(body.transaction_date)
+        if not tx_date.startswith(budget["period"]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Дата должна относиться к периоду бюджета {budget['period']}",
+            )
+    create_transaction(
+        user_id=current_user["id"],
+        category_id=budget["category_id"],
+        amount=body.amount,
+        transaction_type="expense",
+        transaction_date=tx_date,
+        description=body.description,
+    )
+    return calculate_budget_status(budget, current_user["id"])
 
 
 @router.get("/{budget_id}", response_model=BudgetStatus)

@@ -123,14 +123,20 @@ def random_date(start: date, end: date) -> str:
 
 def clear_database(db: Session):
     print("Clearing existing data...")
-    db.query(AIBudgetRecommendation).delete()
-    db.query(AIAnomaly).delete()
-    db.query(AIForecast).delete()
-    db.query(Budget).delete()
-    db.query(Goal).delete()
-    db.query(Transaction).delete()
-    db.query(Category).delete()
-    db.query(User).delete()
+    tables = [
+        "ai_budget_recommendations",
+        "ai_anomalies",
+        "ai_forecasts",
+        "budgets",
+        "goals",
+        "transactions",
+        "categories",
+        "users",
+    ]
+    db.execute(__import__("sqlalchemy").text("PRAGMA foreign_keys = OFF"))
+    for table in tables:
+        db.execute(__import__("sqlalchemy").text(f"DELETE FROM {table}"))
+    db.execute(__import__("sqlalchemy").text("PRAGMA foreign_keys = ON"))
     db.commit()
     print("Database cleared.")
 
@@ -250,26 +256,27 @@ def seed_transactions(db: Session, users: list[User], user_categories: dict) -> 
 def seed_budgets(db: Session, users: list[User], user_categories: dict):
     print("Seeding budgets...")
     budgets = []
-    periods = [
-        f"2024-{m:02d}" for m in range(1, 13)
-    ] + [f"2025-{m:02d}" for m in range(1, 13)]
+    budget_period = "2025-10"
 
     for user in users:
         expense_cats = user_categories[user.id]["expense"]
-        selected_cats = random.sample(expense_cats, k=min(4, len(expense_cats)))
-        selected_periods = random.sample(periods, k=random.randint(6, 12))
-        for cat, low, high in selected_cats:
-            for period in selected_periods:
-                limit = round(random.uniform(low * 2, high * 3), 2)
-                budgets.append(Budget(
+        if not expense_cats:
+            continue
+        cap = min(2, len(expense_cats))
+        n = random.randint(1, cap)
+        for cat, low, high in random.sample(expense_cats, k=n):
+            limit = round(random.uniform(low * 2, high * 2.5), 2)
+            budgets.append(
+                Budget(
                     user_id=user.id,
                     category_id=cat.id,
-                    limit_amount=limit,
-                    period=period,
-                ))
+                    limit_amount=max(limit, 100.0),
+                    period=budget_period,
+                )
+            )
     db.add_all(budgets)
     db.commit()
-    print(f"  -> {len(budgets)} budgets created.")
+    print(f"  -> {len(budgets)} budgets created (1-2 per user at random, period {budget_period}).")
 
 
 def seed_goals(db: Session, users: list[User]):

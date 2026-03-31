@@ -92,6 +92,19 @@ class BudgetUpdate(BaseModel):
     limit_amount: Optional[float] = Field(None, gt=0, description="Лимит суммы")
     period: Optional[str] = Field(None, description="Период (например: 2024-01)")
 
+
+class BudgetTopUp(BaseModel):
+    amount: float = Field(..., gt=0, description="На сколько увеличить лимит")
+
+
+class BudgetSpend(BaseModel):
+    amount: float = Field(..., gt=0, description="Сумма расхода")
+    description: Optional[str] = Field(None, description="Описание операции")
+    transaction_date: Optional[date] = Field(
+        None,
+        description="Дата расхода YYYY-MM-DD (должна попадать в период бюджета; иначе будет подставлена дата по умолчанию)",
+    )
+
 class Budget(BudgetBase):
     id: int
     user_id: int
@@ -164,3 +177,98 @@ class AnalyticsResponse(BaseModel):
 class MessageResponse(BaseModel):
     message: str
     detail: Optional[str] = None
+
+
+class AIForecastResponse(BaseModel):
+    id: int
+    period: str
+    forecasted_balance: float
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AIAnomalyResponse(BaseModel):
+    id: int
+    transaction_id: int
+    anomaly_score: float
+    reason: Optional[str] = None
+    detected_at: datetime
+    amount: float
+    transaction_date: str
+    description: Optional[str] = None
+    category_name: str
+    category_id: int
+    transaction_type: str
+
+    class Config:
+        from_attributes = True
+
+
+class AIBudgetRecommendationResponse(BaseModel):
+    id: int
+    category_id: int
+    category_name: Optional[str] = None
+    recommendation_type: str
+    current_limit: Optional[float] = None
+    proposed_limit: Optional[float] = None
+    justification: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AnomalyItem(BaseModel):
+    transaction_id: int
+    amount: float
+    transaction_date: str
+    category_name: str
+    transaction_type: str
+    description: Optional[str] = None
+    anomaly_score: float
+    reason: Optional[str] = None
+
+
+class AnomalyDetectionResult(BaseModel):
+    detected: int
+    total_analyzed: int
+    anomalies: List[AnomalyItem]
+    message: str
+
+
+class ForecastPeriod(BaseModel):
+    period: str
+    forecasted_balance: float
+
+
+class ForecastResult(BaseModel):
+    periods: int
+    based_on_months: int
+    avg_monthly_income: float
+    avg_monthly_expense: float
+    monthly_trend: float
+    forecasts: List[ForecastPeriod]
+    message: str
+
+
+class RecommendationItem(BaseModel):
+    category_name: str
+    recommendation_type: str
+    current_limit: Optional[float] = None
+    proposed_limit: Optional[float] = None
+    justification: Optional[str] = None
+
+
+class RecommendationsResult(BaseModel):
+    recommendations_created: int
+    analysis_periods: List[str]
+    items: List[RecommendationItem]
+    message: str
+
+
+class AnalyzeAllResult(BaseModel):
+    anomaly_detection: AnomalyDetectionResult
+    forecast: ForecastResult
+    recommendations: RecommendationsResult

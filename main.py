@@ -1,9 +1,13 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from contextlib import asynccontextmanager
 from routes import auth, transaction, budget, goals, analytics
 from db import init_db
 from utils import init_test_data
+from pathlib import Path
 
 
 @asynccontextmanager
@@ -18,6 +22,7 @@ async def lifespan(app: FastAPI):
     print("=" * 60)
     print("Документация Swagger: http://localhost:8000/docs")
     print("Документация ReDoc: http://localhost:8000/redoc")
+    print("Web UI: http://localhost:8000/ui/")
     print("=" * 60)
     print("Готов к работе!")
     print("=" * 60)
@@ -65,7 +70,17 @@ app = FastAPI(
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key="secret-key-for-sessions"
+    secret_key="secret-key-for-sessions",
+    same_site="lax",
+    https_only=False,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth.router)
@@ -73,6 +88,20 @@ app.include_router(transaction.router)
 app.include_router(budget.router)
 app.include_router(goals.router)
 app.include_router(analytics.router)
+
+ui_path = Path(__file__).resolve().parent / "ui"
+ui_static_path = ui_path / "static"
+app.mount("/ui/static", StaticFiles(directory=ui_static_path), name="ui_static")
+
+
+@app.get("/ui", include_in_schema=False)
+async def ui_redirect():
+    return RedirectResponse(url="/ui/", status_code=307)
+
+
+@app.get("/ui/", tags=["Главная"], include_in_schema=False)
+async def ui_page():
+    return FileResponse(ui_path / "index.html")
 
 
 @app.get("/", tags=["Главная"])
@@ -82,7 +111,8 @@ async def root():
         "version": "1.0.0",
         "documentation": {
             "swagger": "/docs",
-            "redoc": "/redoc"
+            "redoc": "/redoc",
+            "web_ui": "/ui/"
         },
         "endpoints": {
             "auth": "/auth",

@@ -2,7 +2,7 @@ from passlib.context import CryptContext
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
-from db import SessionLocal, User, Category, Transaction, Budget, Goal
+from db import SessionLocal, User, Category, Transaction, Budget, Goal, AIForecast, AIAnomaly, AIBudgetRecommendation
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -275,11 +275,25 @@ def delete_transaction(transaction_id: int) -> bool:
 def create_budget(user_id: int, category_id: int, limit_amount: float, period: str) -> Dict[str, Any]:
     db = get_db()
     try:
+        existing = (
+            db.query(Budget)
+            .filter(
+                Budget.user_id == user_id,
+                Budget.category_id == category_id,
+                Budget.period == period,
+            )
+            .first()
+        )
+        if existing:
+            existing.limit_amount = limit_amount
+            db.commit()
+            db.refresh(existing)
+            return budget_to_dict(existing)
         budget = Budget(
             user_id=user_id,
             category_id=category_id,
             limit_amount=limit_amount,
-            period=period
+            period=period,
         )
         db.add(budget)
         db.commit()
@@ -294,6 +308,42 @@ def get_user_budgets(user_id: int) -> List[Dict[str, Any]]:
     try:
         budgets = db.query(Budget).filter(Budget.user_id == user_id).all()
         return [budget_to_dict(b) for b in budgets]
+    finally:
+        db.close()
+
+
+def current_budget_period() -> str:
+    return datetime.now().strftime("%Y-%m")
+
+
+def dedupe_budget_dicts(budgets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    by_key: Dict[tuple, Dict[str, Any]] = {}
+    for b in sorted(budgets, key=lambda x: x["id"]):
+        key = (b["category_id"], b["period"])
+        by_key[key] = b
+    return list(by_key.values())
+
+
+def get_user_budgets_for_display(
+    user_id: int,
+    *,
+    period: Optional[str] = None,
+    all_periods: bool = False,
+) -> List[Dict[str, Any]]:
+    budgets = dedupe_budget_dicts(get_user_budgets(user_id))
+    if all_periods:
+        return budgets
+    if period:
+        return [b for b in budgets if b["period"] == period]
+    ym = current_budget_period()
+    return [b for b in budgets if b["period"] == ym]
+
+
+def get_user_budget_periods(user_id: int) -> List[str]:
+    db = get_db()
+    try:
+        rows = db.query(Budget.period).filter(Budget.user_id == user_id).distinct().all()
+        return sorted({r[0] for r in rows if r and r[0]}, reverse=True)
     finally:
         db.close()
 
@@ -411,6 +461,76 @@ def delete_goal(goal_id: int) -> bool:
         db.delete(goal)
         db.commit()
         return True
+    finally:
+        db.close()
+
+
+def get_user_forecasts(user_id: int) -> List[Dict[str, Any]]:
+    db = get_db()
+    try:
+        rows = db.query(AIForecast).filter(AIForecast.user_id == user_id).order_by(AIForecast.period.desc()).all()
+        return [
+            {"id": r.id, "period": r.period, "forecasted_balance": r.forecasted_balance, "created_at": r.created_at}
+            for r in rows
+        ]
+    finally:
+        db.close()
+
+
+def get_user_anomalies(user_id: int) -> List[Dict[str, Any]]:
+    db = get_db()
+    try:
+        rows = (
+            db.query(AIAnomaly, Transaction, Category)
+            .join(Transaction, AIAnomaly.transaction_id == Transaction.id)
+            .join(Category, Transaction.category_id == Category.id)
+            .filter(Transaction.user_id == user_id)
+            .order_by(AIAnomaly.anomaly_score.desc())
+            .all()
+        )
+        return [
+            {
+                "id": anomaly.id,
+                "transaction_id": anomaly.transaction_id,
+                "anomaly_score": anomaly.anomaly_score,
+                "reason": anomaly.reason,
+                "detected_at": anomaly.detected_at,
+                "amount": tx.amount,
+                "transaction_date": tx.transaction_date,
+                "description": tx.description,
+                "category_name": cat.name,
+                "category_id": tx.category_id,
+                "transaction_type": tx.type,
+            }
+            for anomaly, tx, cat in rows
+        ]
+    finally:
+        db.close()
+
+
+def get_user_recommendations(user_id: int) -> List[Dict[str, Any]]:
+    db = get_db()
+    try:
+        rows = (
+            db.query(AIBudgetRecommendation, Category.name)
+            .join(Category, AIBudgetRecommendation.category_id == Category.id)
+            .filter(AIBudgetRecommendation.user_id == user_id)
+            .order_by(AIBudgetRecommendation.created_at.desc())
+            .all()
+        )
+        return [
+            {
+                "id": r[0].id,
+                "category_id": r[0].category_id,
+                "category_name": r[1],
+                "recommendation_type": r[0].recommendation_type,
+                "current_limit": r[0].current_limit,
+                "proposed_limit": r[0].proposed_limit,
+                "justification": r[0].justification,
+                "created_at": r[0].created_at,
+            }
+            for r in rows
+        ]
     finally:
         db.close()
 

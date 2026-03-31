@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Boolean, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from datetime import datetime
@@ -68,14 +68,17 @@ class Transaction(Base):
 
 class Budget(Base):
     __tablename__ = "budgets"
-    
+    __table_args__ = (
+        UniqueConstraint("user_id", "category_id", "period", name="uq_budget_user_category_period"),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
     limit_amount = Column(Float, nullable=False)
     period = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     user = relationship("User", back_populates="budgets")
     category = relationship("Category", back_populates="budgets")
 
@@ -132,6 +135,10 @@ class AIBudgetRecommendation(Base):
     
     user = relationship("User")
     category = relationship("Category")
+
+
+def init_db():
+    Base.metadata.create_all(bind=engine)
 
 
 def get_db():

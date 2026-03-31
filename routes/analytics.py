@@ -3,11 +3,18 @@ from typing import List, Optional
 from datetime import datetime
 from collections import defaultdict
 from models import (
-    CategoryStatistics, PeriodStatistics, ExpenseDynamics, 
-    AnalyticsResponse
+    CategoryStatistics, PeriodStatistics, ExpenseDynamics,
+    AnalyticsResponse,
+    AIForecastResponse, AIAnomalyResponse, AIBudgetRecommendationResponse,
+    AnomalyItem, AnomalyDetectionResult, ForecastResult, ForecastPeriod,
+    RecommendationItem, RecommendationsResult, AnalyzeAllResult,
 )
 from routes.auth import get_current_user
-from utils import get_user_transactions, get_category_by_id
+from utils import (
+    get_user_transactions, get_category_by_id,
+    get_user_forecasts, get_user_anomalies, get_user_recommendations,
+)
+from ai_engine import run_anomaly_detection, run_forecast, run_recommendations
 
 router = APIRouter(prefix="/analytics", tags=["Аналитика финансов"])
 
@@ -202,3 +209,143 @@ async def get_summary(request: Request):
         "expense_count": expense_count,
         "total_transactions": len(transactions)
     }
+
+
+@router.get("/forecasts", response_model=List[AIForecastResponse])
+async def get_forecasts(request: Request):
+    current_user = await get_current_user(request)
+    items = get_user_forecasts(current_user["id"])
+    return [AIForecastResponse(**x) for x in items]
+
+
+@router.get("/anomalies", response_model=List[AIAnomalyResponse])
+async def get_anomalies(request: Request):
+    """
+    Возвращает все аномальные транзакции текущего пользователя.
+
+    При каждом обращении автоматически запускает алгоритм обнаружения
+    аномалий (Z-score по категориям + дубли), обновляет результаты в БД
+    и возвращает полный список с деталями транзакции: сумма, дата, категория,
+    описание, оценка аномальности и причина. Сортировка по убыванию anomaly_score.
+    """
+    current_user = await get_current_user(request)
+    run_anomaly_detection(current_user["id"])
+    items = get_user_anomalies(current_user["id"])
+    return [AIAnomalyResponse(**x) for x in items]
+
+
+@router.get("/recommendations", response_model=List[AIBudgetRecommendationResponse])
+async def get_recommendations(request: Request):
+    current_user = await get_current_user(request)
+    items = get_user_recommendations(current_user["id"])
+    return [AIBudgetRecommendationResponse(**x) for x in items]
+
+
+@router.post("/run-anomaly-detection", response_model=AnomalyDetectionResult)
+async def trigger_anomaly_detection(request: Request):
+    """
+    Запускает обнаружение аномальных транзакций для текущего пользователя.
+
+    Метод Z-score: транзакция аномальна, если её сумма превышает
+    среднее по категории более чем на 2 стандартных отклонения.
+    Также фиксируются возможные дублирующие транзакции.
+    Результаты сохраняются в таблицы ai_anomalies и поля transactions.
+    """
+    current_user = await get_current_user(request)
+    result = run_anomaly_detection(current_user["id"])
+    return AnomalyDetectionResult(
+        detected=result["detected"],
+        total_analyzed=result["total_analyzed"],
+        anomalies=[AnomalyItem(**a) for a in result["anomalies"]],
+        message=result["message"],
+    )
+
+
+@router.post("/run-forecast", response_model=ForecastResult)
+async def trigger_forecast(request: Request):
+    """
+    Генерирует прогноз баланса на следующие 3 месяца для текущего пользователя.
+
+    Использует среднее значение доходов и расходов за последние 6 месяцев
+    с учётом линейного тренда по последним 3 месяцам.
+    Результаты сохраняются в таблицу ai_forecasts.
+    """
+    current_user = await get_current_user(request)
+    result = run_forecast(current_user["id"])
+    if result.get("periods", 0) == 0:
+        raise HTTPException(status_code=400, detail=result.get("message"))
+    return ForecastResult(
+        periods=result["periods"],
+        based_on_months=result["based_on_months"],
+        avg_monthly_income=result["avg_monthly_income"],
+        avg_monthly_expense=result["avg_monthly_expense"],
+        monthly_trend=result["monthly_trend"],
+        forecasts=[ForecastPeriod(**p) for p in result["forecasts"]],
+        message=result["message"],
+    )
+
+
+@router.post("/run-recommendations", response_model=RecommendationsResult)
+async def trigger_recommendations(request: Request):
+    """
+    Анализирует расходы за последние 3 месяца и создаёт рекомендации по бюджету.
+
+    - INCREASE: средние расходы > 90% лимита.
+    - DECREASE: средние расходы < 50% лимита.
+    - CREATE: регулярные расходы в категории без установленного лимита.
+    Результаты сохраняются в таблицу ai_budget_recommendations.
+    """
+    current_user = await get_current_user(request)
+    result = run_recommendations(current_user["id"])
+    return RecommendationsResult(
+        recommendations_created=result["recommendations_created"],
+        analysis_periods=result["analysis_periods"],
+        items=[RecommendationItem(**i) for i in result["items"]],
+        message=result["message"],
+    )
+
+
+@router.post("/analyze", response_model=AnalyzeAllResult)
+async def run_full_analysis(request: Request):
+    """
+    Запускает все три функции интеллектуального анализа последовательно:
+    обнаружение аномалий, прогноз баланса и рекомендации по бюджету.
+    """
+    current_user = await get_current_user(request)
+    uid = current_user["id"]
+
+    anomaly_result = run_anomaly_detection(uid)
+
+    forecast_raw = run_forecast(uid)
+    if forecast_raw.get("periods", 0) == 0:
+        forecast_raw.setdefault("based_on_months", 0)
+        forecast_raw.setdefault("avg_monthly_income", 0.0)
+        forecast_raw.setdefault("avg_monthly_expense", 0.0)
+        forecast_raw.setdefault("monthly_trend", 0.0)
+        forecast_raw.setdefault("forecasts", [])
+
+    rec_result = run_recommendations(uid)
+
+    return AnalyzeAllResult(
+        anomaly_detection=AnomalyDetectionResult(
+            detected=anomaly_result["detected"],
+            total_analyzed=anomaly_result["total_analyzed"],
+            anomalies=[AnomalyItem(**a) for a in anomaly_result["anomalies"]],
+            message=anomaly_result["message"],
+        ),
+        forecast=ForecastResult(
+            periods=forecast_raw["periods"],
+            based_on_months=forecast_raw["based_on_months"],
+            avg_monthly_income=forecast_raw["avg_monthly_income"],
+            avg_monthly_expense=forecast_raw["avg_monthly_expense"],
+            monthly_trend=forecast_raw["monthly_trend"],
+            forecasts=[ForecastPeriod(**p) for p in forecast_raw["forecasts"]],
+            message=forecast_raw["message"],
+        ),
+        recommendations=RecommendationsResult(
+            recommendations_created=rec_result["recommendations_created"],
+            analysis_periods=rec_result["analysis_periods"],
+            items=[RecommendationItem(**i) for i in rec_result["items"]],
+            message=rec_result["message"],
+        ),
+    )
